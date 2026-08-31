@@ -605,13 +605,6 @@ class GatheringView(
                     interaction.user.id
                 )
 
-                if member and role not in member.roles:
-                    await interaction.response.send_message(
-                        f"❌ Ты должен иметь роль {role.mention}, "
-                        "чтобы участвовать.",
-                        ephemeral=True
-                    )
-                    return
 
         # ----------------------------------------------------
         # Добавляем ID
