@@ -899,17 +899,6 @@ async def gathering_command(
     # Проверка прав
     # --------------------------------------------------------
 
-    if not (
-        interaction.user.guild_permissions.manage_guild
-        or interaction.user.guild_permissions.administrator
-    ):
-        await interaction.response.send_message(
-            "❌ У тебя нет права создавать сборы.\n"
-            "Нужны права **Manage Server** или "
-            "**Administrator**.",
-            ephemeral=True
-        )
-        return
 
     embed = discord.Embed(
         title="🎮 Создание сбора",
