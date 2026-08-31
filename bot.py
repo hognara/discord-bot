@@ -4,11 +4,11 @@ from discord.ext import commands
 from discord import app_commands
 from typing import Optional
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+
 # ============================================================
 # НАСТРОЙКИ
 # ============================================================
-
-TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Если хочешь, чтобы войсы создавались в определённой категории,
 # укажи ID категории.
