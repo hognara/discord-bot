@@ -589,23 +589,7 @@ class GatheringView(
             )
             return
 
-        # ----------------------------------------------------
-        # Проверяем роль
-        # ----------------------------------------------------
-
-        role_id = gathering["role_id"]
-
-        if role_id:
-            role = interaction.guild.get_role(
-                role_id
-            )
-
-            if role:
-                member = interaction.guild.get_member(
-                    interaction.user.id
-                )
-
-
+      
         # ----------------------------------------------------
         # Добавляем ID
         # ----------------------------------------------------
