@@ -954,6 +954,60 @@ async def delete_gathering(
         f"✅ Сбор №{gathering_id} удалён."
     )
 
+# ============================================================
+# АВТОМАТИЧЕСКОЕ УДАЛЕНИЕ ПУСТОГО ВОЙСА
+# ============================================================
+
+@bot.event
+async def on_voice_state_update(
+    member: discord.Member,
+    before: discord.VoiceState,
+    after: discord.VoiceState
+):
+    # Если пользователь не выходил из войса
+    if before.channel is None:
+        return
+
+    channel = before.channel
+
+    # Если в канале ещё кто-то есть — ничего не делаем
+    if len(channel.members) > 0:
+        return
+
+    # Проверяем, является ли этот канал войсом какого-либо сбора
+    for gathering_id, gathering in list(gatherings.items()):
+
+        if gathering.get("voice_id") != channel.id:
+            continue
+
+        try:
+            await channel.delete(
+                reason="Голосовой канал сбора стал пустым"
+            )
+
+            print(
+                f"🗑️ Голосовой канал '{channel.name}' "
+                f"автоматически удалён."
+            )
+
+        except discord.NotFound:
+            pass
+
+        except discord.Forbidden:
+            print(
+                f"❌ Не могу удалить '{channel.name}'. "
+                f"Проверь право Manage Channels."
+            )
+
+        except discord.HTTPException as error:
+            print(
+                f"❌ Ошибка удаления канала: {error}"
+            )
+
+        # Удаляем сбор из памяти
+        gatherings.pop(gathering_id, None)
+
+        break
 
 # ============================================================
 # СОБЫТИЕ READY
