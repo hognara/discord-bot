@@ -811,9 +811,7 @@ class GatheringView(
                 continue
 
             # Участник должен находиться в каком-либо войсе
-            if not member.voice:
-                not_in_voice += 1
-                continue
+
 
             try:
                 await member.move_to(
