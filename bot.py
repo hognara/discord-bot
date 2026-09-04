@@ -1701,6 +1701,65 @@ async def on_ready():
             f"Ошибка синхронизации команд: "
             f"{error}"
         )
+        
+# ------------------------------------------------------------
+# /serverinfo
+# ------------------------------------------------------------
+
+@bot.tree.command(
+    name="serverinfo",
+    description="Показать информацию о сервере"
+)
+@app_commands.guild_only()
+async def serverinfo_command(interaction: discord.Interaction):
+    guild = interaction.guild
+
+    embed = discord.Embed(
+        title=f"📊 Информация о сервере — {guild.name}",
+        color=discord.Color.blurple()
+    )
+
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
+
+    embed.add_field(
+        name="🆔 ID",
+        value=str(guild.id),
+        inline=True
+    )
+
+    embed.add_field(
+        name="👥 Участники",
+        value=str(guild.member_count),
+        inline=True
+    )
+
+    embed.add_field(
+        name="💬 Каналы",
+        value=str(len(guild.channels)),
+        inline=True
+    )
+
+    embed.add_field(
+        name="🏷 Роли",
+        value=str(len(guild.roles)),
+        inline=True
+    )
+
+    embed.add_field(
+        name="👑 Владелец",
+        value=f"<@{guild.owner_id}>",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📅 Создан",
+        value=f"<t:{int(guild.created_at.timestamp())}:F>",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
+
 
 
 # ============================================================
