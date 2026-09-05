@@ -1660,52 +1660,6 @@ async def on_voice_state_update(
         break
 
 
-# ============================================================
-# READY
-# ============================================================
-
-@bot.event
-async def on_ready():
-
-    print("========================================")
-    print(f"Бот запущен: {bot.user}")
-    print(f"ID бота: {bot.user.id}")
-    print(f"Серверов: {len(bot.guilds)}")
-    print("========================================")
-
-    for guild in bot.guilds:
-
-        try:
-            # Получаем команды, которые реально зарегистрированы
-            commands_list = await bot.tree.sync(guild=guild)
-
-            print(
-                f"✅ Сервер: {guild.name}"
-            )
-
-            print(
-                f"✅ Синхронизировано команд: "
-                f"{len(commands_list)}"
-            )
-
-            print(
-                "📋 Команды:"
-            )
-
-            for command in commands_list:
-                print(
-                    f"   /{command.name}"
-                )
-
-        except Exception as error:
-
-            print(
-                f"❌ Ошибка синхронизации "
-                f"сервера {guild.name}: {error}"
-            )
-
-    print("========================================")
-
 
 # ============================================================
 # 5X5
@@ -2997,7 +2951,60 @@ async def serverinfo_command(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+# ============================================================
+# СИНХРОНИЗАЦИЯ SLASH-КОМАНД
+# ============================================================
 
+async def sync_commands():
+
+    print("========================================")
+    print("🔄 Начинаю синхронизацию команд...")
+    print("========================================")
+
+    for guild in bot.guilds:
+
+        try:
+            synced = await bot.tree.sync(guild=guild)
+
+            print(
+                f"✅ {guild.name}: "
+                f"{len(synced)} команд"
+            )
+
+            for command in synced:
+                print(f"   /{command.name}")
+
+        except Exception as error:
+
+            print(
+                f"❌ Ошибка синхронизации "
+                f"{guild.name}: {error}"
+            )
+
+    print("========================================")
+
+
+# ============================================================
+# READY
+# ============================================================
+
+@bot.event
+async def on_ready():
+
+    print("========================================")
+    print(f"🤖 Бот запущен: {bot.user}")
+    print(f"🆔 ID бота: {bot.user.id}")
+    print(f"🌐 Серверов: {len(bot.guilds)}")
+    print("========================================")
+
+    # Не синхронизируем повторно при реконнекте
+    if not hasattr(bot, "_commands_synced"):
+
+        bot._commands_synced = True
+
+        await sync_commands()
+
+    print("========================================")
 
 # ============================================================
 # ЗАПУСК БОТА
