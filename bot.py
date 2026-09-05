@@ -2951,37 +2951,6 @@ async def serverinfo_command(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
-# ============================================================
-# СИНХРОНИЗАЦИЯ SLASH-КОМАНД
-# ============================================================
-
-async def sync_commands():
-
-    print("========================================")
-    print("🔄 Начинаю синхронизацию команд...")
-    print("========================================")
-
-    for guild in bot.guilds:
-
-        try:
-            synced = await bot.tree.sync(guild=guild)
-
-            print(
-                f"✅ {guild.name}: "
-                f"{len(synced)} команд"
-            )
-
-            for command in synced:
-                print(f"   /{command.name}")
-
-        except Exception as error:
-
-            print(
-                f"❌ Ошибка синхронизации "
-                f"{guild.name}: {error}"
-            )
-
-    print("========================================")
 
 
 # ============================================================
