@@ -2966,12 +2966,21 @@ async def on_ready():
     print(f"🌐 Серверов: {len(bot.guilds)}")
     print("========================================")
 
-    # Не синхронизируем повторно при реконнекте
-    if not hasattr(bot, "_commands_synced"):
+    try:
+        synced = await bot.tree.sync()
 
-        bot._commands_synced = True
+        print(
+            f"✅ Синхронизировано Slash-команд: {len(synced)}"
+        )
 
-        await sync_commands()
+        for command in synced:
+            print(f"   /{command.name}")
+
+    except Exception as error:
+
+        print(
+            f"❌ Ошибка синхронизации команд: {error}"
+        )
 
     print("========================================")
 
