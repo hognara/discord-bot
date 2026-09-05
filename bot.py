@@ -1715,34 +1715,28 @@ async def on_ready():
         )
 
 # ============================================================
-# СБОР 5X5
+# 5X5
 # ============================================================
+
+import random
+import asyncio
+from datetime import datetime, timedelta
+
+
+# ------------------------------------------------------------
+# ХРАНИЛИЩЕ СБОРОВ 5X5
+# ------------------------------------------------------------
 
 gatherings_5x5 = {}
 
 next_gathering_5x5_id = 1
 
 
-# ============================================================
-# НАСТРОЙКИ СБОРА 5X5
-# ============================================================
+# ------------------------------------------------------------
+# EMBED 5X5
+# ------------------------------------------------------------
 
-TEAM_CATEGORY_NAME = "Сборы"
-
-TEAM_1_NAME = "🔵 Команда 1"
-TEAM_2_NAME = "🔴 Команда 2"
-
-COMMON_VOICE_NAME = "Общий"
-
-
-# ============================================================
-# EMBED СБОРА 5X5
-# ============================================================
-
-def build_5x5_embed(
-    gathering: dict,
-    guild: discord.Guild
-):
+def build_5x5_embed(gathering, guild):
 
     participants = gathering["participants"]
 
@@ -1758,13 +1752,10 @@ def build_5x5_embed(
             member = guild.get_member(user_id)
 
             if member:
-
                 lines.append(
                     f"`{i}.` {member.mention}"
                 )
-
             else:
-
                 lines.append(
                     f"`{i}.` <@{user_id}>"
                 )
@@ -1775,14 +1766,11 @@ def build_5x5_embed(
 
         players_text = "Пока никто не записался."
 
-    # --------------------------------------------------------
-    # Статус
-    # --------------------------------------------------------
-
     if len(participants) >= 10:
 
         status = (
-            "🟢 **Сбор набран! Можно начинать матч.**"
+            "🟢 **Все 10 игроков набраны!**\n"
+            "Создатель может начать матч."
         )
 
     else:
@@ -1792,20 +1780,13 @@ def build_5x5_embed(
             f"{10 - len(participants)} игроков.**"
         )
 
-    # --------------------------------------------------------
-    # Embed
-    # --------------------------------------------------------
-
     embed = discord.Embed(
 
-        title=(
-            f"🎮 СБОР 5X5 — "
-            f"{gathering['name']}"
-        ),
+        title=f"⚔️ 5X5 — {gathering['name']}",
 
         description=(
-            "Нажмите **«Участвовать»**, "
-            "чтобы попасть в сбор.\n\n"
+            f"📅 **Дата:** {gathering['date']}\n"
+            f"⏰ **Время:** {gathering['time']}\n\n"
             f"{status}"
         ),
 
@@ -1816,27 +1797,16 @@ def build_5x5_embed(
 
         name="👥 Игроки",
 
-        value=(
-            f"**{len(participants)} / 10**"
-        ),
+        value=f"**{len(participants)} / 10**",
 
         inline=True
     )
 
     embed.add_field(
 
-        name="📅 Дата",
+        name="👤 Создатель",
 
-        value=gathering["date"],
-
-        inline=True
-    )
-
-    embed.add_field(
-
-        name="⏰ Время",
-
-        value=gathering["time"],
+        value=f"<@{gathering['creator_id']}>",
 
         inline=True
     )
@@ -1852,23 +1822,19 @@ def build_5x5_embed(
 
     embed.set_footer(
 
-        text=f"Сбор 5X5 №{gathering['id']}"
+        text=f"5X5 сбор №{gathering['id']}"
     )
 
     return embed
 
 
-# ============================================================
+# ------------------------------------------------------------
 # ОБНОВЛЕНИЕ СООБЩЕНИЯ 5X5
-# ============================================================
+# ------------------------------------------------------------
 
-async def update_5x5_message(
-    gathering_id: int
-):
+async def update_5x5_message(gathering_id):
 
-    gathering = gatherings_5x5.get(
-        gathering_id
-    )
+    gathering = gatherings_5x5.get(gathering_id)
 
     if not gathering:
         return
@@ -1923,58 +1889,96 @@ async def update_5x5_message(
         pass
 
 
-# ============================================================
-# ПОЛУЧЕНИЕ VIEW 5X5
-# ============================================================
+# ------------------------------------------------------------
+# АВТОУДАЛЕНИЕ СБОРА
+# ------------------------------------------------------------
 
-def build_5x5_view(
-    gathering_id: int
-):
+async def auto_delete_5x5(gathering_id):
 
-    return Gathering5x5View(
+    await asyncio.sleep(
+        GATHERING5X5_TIMEOUT_HOURS * 60 * 60
+    )
+
+    gathering = gatherings_5x5.get(
         gathering_id
     )
 
+    if not gathering:
+        return
 
-# ============================================================
-# VIEW СОЗДАНИЯ СБОРА 5X5
-# ============================================================
+    # Если сбор уже завершён —
+    # он уже должен быть удалён.
+    if gathering.get("finished"):
 
-class Create5x5View(
-    discord.ui.View
-):
+        return
 
-    def __init__(self):
-
-        super().__init__(
-            timeout=300
-        )
-
-    @discord.ui.button(
-
-        label="Создать сбор 5x5",
-
-        emoji="🎮",
-
-        style=discord.ButtonStyle.primary
+    guild = bot.get_guild(
+        gathering["guild_id"]
     )
-    async def create_5x5(
 
-        self,
+    if guild:
 
-        interaction: discord.Interaction,
-
-        button: discord.ui.Button
-    ):
-
-        await interaction.response.send_modal(
-
-            Gathering5x5Modal()
+        channel = guild.get_channel(
+            gathering["channel_id"]
         )
+
+        if channel:
+
+            try:
+
+                message = await channel.fetch_message(
+                    gathering["message_id"]
+                )
+
+                await message.delete()
+
+            except (
+                discord.NotFound,
+                discord.Forbidden,
+                discord.HTTPException
+            ):
+
+                pass
+
+        # Удаляем созданные командные войсы
+        for voice_id in gathering.get(
+            "team_voice_ids",
+            []
+        ):
+
+            voice = guild.get_channel(
+                voice_id
+            )
+
+            if voice:
+
+                try:
+
+                    await voice.delete(
+                        reason="Автоматическое удаление 5X5"
+                    )
+
+                except (
+                    discord.NotFound,
+                    discord.Forbidden,
+                    discord.HTTPException
+                ):
+
+                    pass
+
+    gatherings_5x5.pop(
+        gathering_id,
+        None
+    )
+
+    print(
+        f"🗑️ Сбор 5X5 №{gathering_id} "
+        f"автоматически удалён."
+    )
 
 
 # ============================================================
-# MODAL СОЗДАНИЯ СБОРА 5X5
+# MODAL СОЗДАНИЯ 5X5
 # ============================================================
 
 class Gathering5x5Modal(
@@ -1984,58 +1988,40 @@ class Gathering5x5Modal(
     def __init__(self):
 
         super().__init__(
-            title="🎮 Создание сбора 5X5"
+            title="⚔️ Создание сбора 5X5"
         )
-
-        # ----------------------------------------------------
-        # Название
-        # ----------------------------------------------------
 
         self.event_name = discord.ui.TextInput(
 
             label="Название сбора",
 
-            placeholder=(
-                "Например: CS2 5X5"
-            ),
+            placeholder="Например: CS2 5X5",
 
             required=True,
 
             max_length=100
         )
 
-        # ----------------------------------------------------
-        # Дата
-        # ----------------------------------------------------
-
         self.event_date = discord.ui.TextInput(
 
             label="Дата",
 
-            placeholder=(
-                "Например: 10.09.2026"
-            ),
+            placeholder="Например: 10.09.2026",
 
             required=True,
 
-            max_length=30
+            max_length=20
         )
-
-        # ----------------------------------------------------
-        # Время
-        # ----------------------------------------------------
 
         self.event_time = discord.ui.TextInput(
 
             label="Время",
 
-            placeholder=(
-                "Например: 21:00"
-            ),
+            placeholder="Например: 20:00",
 
             required=True,
 
-            max_length=30
+            max_length=20
         )
 
         self.add_item(
@@ -2050,14 +2036,8 @@ class Gathering5x5Modal(
             self.event_time
         )
 
-    # ========================================================
-    # СОЗДАНИЕ
-    # ========================================================
-
     async def on_submit(
-
         self,
-
         interaction: discord.Interaction
     ):
 
@@ -2087,19 +2067,17 @@ class Gathering5x5Modal(
 
             "participants": [],
 
+            "creator_id": interaction.user.id,
+
             "started": False,
 
             "finished": False,
 
-            "creator_id": interaction.user.id,
+            "team_voice_ids": [],
 
-            "team_1_id": None,
+            "team1": [],
 
-            "team_2_id": None,
-
-            "common_voice_id": None,
-
-            "full_announced": False
+            "team2": []
         }
 
         gatherings_5x5[
@@ -2129,6 +2107,51 @@ class Gathering5x5Modal(
 
         gathering["message_id"] = message.id
 
+        # Запускаем таймер автоматического удаления
+        asyncio.create_task(
+            auto_delete_5x5(
+                gathering_id
+            )
+        )
+
+
+# ============================================================
+# VIEW СОЗДАНИЯ 5X5
+# ============================================================
+
+class CreateGathering5x5View(
+    discord.ui.View
+):
+
+    def __init__(self):
+
+        super().__init__(
+            timeout=300
+        )
+
+    @discord.ui.button(
+
+        label="Создать сбор 5X5",
+
+        emoji="⚔️",
+
+        style=discord.ButtonStyle.primary
+    )
+
+    async def create_5x5(
+
+        self,
+
+        interaction: discord.Interaction,
+
+        button: discord.ui.Button
+    ):
+
+        await interaction.response.send_modal(
+
+            Gathering5x5Modal()
+        )
+
 
 # ============================================================
 # VIEW СБОРА 5X5
@@ -2139,10 +2162,8 @@ class Gathering5x5View(
 ):
 
     def __init__(
-
         self,
-
-        gathering_id: int
+        gathering_id
     ):
 
         super().__init__(
@@ -2155,27 +2176,12 @@ class Gathering5x5View(
             gathering_id
         )
 
-        started = False
+        if not gathering:
+            return
 
-        full = False
-
-        finished = False
-
-        if gathering:
-
-            started = gathering["started"]
-
-            full = (
-                len(
-                    gathering["participants"]
-                ) >= 10
-            )
-
-            finished = gathering["finished"]
-
-        # ====================================================
+        # ----------------------------------------------------
         # УЧАСТВОВАТЬ
-        # ====================================================
+        # ----------------------------------------------------
 
         join_button = discord.ui.Button(
 
@@ -2187,12 +2193,6 @@ class Gathering5x5View(
 
             custom_id=(
                 f"5x5_join_{gathering_id}"
-            ),
-
-            disabled=(
-                started
-                or finished
-                or full
             )
         )
 
@@ -2204,9 +2204,9 @@ class Gathering5x5View(
             join_button
         )
 
-        # ====================================================
+        # ----------------------------------------------------
         # ВЫЙТИ
-        # ====================================================
+        # ----------------------------------------------------
 
         leave_button = discord.ui.Button(
 
@@ -2218,11 +2218,6 @@ class Gathering5x5View(
 
             custom_id=(
                 f"5x5_leave_{gathering_id}"
-            ),
-
-            disabled=(
-                started
-                or finished
             )
         )
 
@@ -2234,26 +2229,25 @@ class Gathering5x5View(
             leave_button
         )
 
-        # ====================================================
+        # ----------------------------------------------------
         # НАЧАТЬ
-        # ====================================================
+        # ----------------------------------------------------
 
         start_button = discord.ui.Button(
 
-            label="Начать матч",
+            label="Начать 5X5",
 
             emoji="🚀",
 
             style=discord.ButtonStyle.primary,
 
-            custom_id=(
-                f"5x5_start_{gathering_id}"
+            disabled=(
+                len(gathering["participants"]) < 10
+                or gathering["started"]
             ),
 
-            disabled=(
-                not full
-                or started
-                or finished
+            custom_id=(
+                f"5x5_start_{gathering_id}"
             )
         )
 
@@ -2265,9 +2259,9 @@ class Gathering5x5View(
             start_button
         )
 
-        # ====================================================
+        # ----------------------------------------------------
         # КОНЕЦ
-        # ====================================================
+        # ----------------------------------------------------
 
         end_button = discord.ui.Button(
 
@@ -2277,13 +2271,12 @@ class Gathering5x5View(
 
             style=discord.ButtonStyle.danger,
 
-            custom_id=(
-                f"5x5_end_{gathering_id}"
+            disabled=(
+                not gathering["started"]
             ),
 
-            disabled=(
-                not started
-                or finished
+            custom_id=(
+                f"5x5_end_{gathering_id}"
             )
         )
 
@@ -2300,14 +2293,11 @@ class Gathering5x5View(
     # ========================================================
 
     async def join_callback(
-
         self,
-
         interaction: discord.Interaction
     ):
 
         gathering = gatherings_5x5.get(
-
             self.gathering_id
         )
 
@@ -2315,7 +2305,7 @@ class Gathering5x5View(
 
             await interaction.response.send_message(
 
-                "❌ Этот сбор больше не существует.",
+                "❌ Этот сбор уже удалён.",
 
                 ephemeral=True
             )
@@ -2326,16 +2316,36 @@ class Gathering5x5View(
 
             await interaction.response.send_message(
 
-                "❌ Матч уже начался.",
+                "❌ Сбор уже начался.",
 
                 ephemeral=True
             )
 
             return
 
-        if len(
-            gathering["participants"]
-        ) >= 10:
+        user_id = interaction.user.id
+
+        # ====================================================
+        # ПРОВЕРКА ПОВТОРНОЙ РЕГИСТРАЦИИ
+        # ====================================================
+
+        if user_id in gathering["participants"]:
+
+            await interaction.response.send_message(
+
+                "⚠️ Ты уже зарегистрирован "
+                "в этом сборе 5X5!",
+
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # ПРОВЕРКА 10 ИГРОКОВ
+        # ====================================================
+
+        if len(gathering["participants"]) >= 10:
 
             await interaction.response.send_message(
 
@@ -2346,102 +2356,64 @@ class Gathering5x5View(
 
             return
 
-        if interaction.user.id in gathering[
-            "participants"
-        ]:
+        # ====================================================
+        # ДОБАВЛЯЕМ ИГРОКА
+        # ====================================================
 
-            await interaction.response.send_message(
+        gathering["participants"].append(
+            user_id
+        )
 
-                "⚠️ Ты уже участвуешь.",
+        await interaction.response.send_message(
 
-                ephemeral=True
-            )
+            "✅ Ты зарегистрирован "
+            "в сборе 5X5!",
 
-            return
+            ephemeral=True
+        )
 
-        gathering[
-            "participants"
-        ].append(
-            interaction.user.id
+        await update_5x5_message(
+            self.gathering_id
         )
 
         # ====================================================
-        # ЕСЛИ НАБРАЛИ 10
+        # ВСЕ 10 ИГРОКОВ
         # ====================================================
 
         if len(
             gathering["participants"]
         ) == 10:
 
-            if not gathering[
-                "full_announced"
-            ]:
+            mentions = " ".join(
 
-                gathering[
-                    "full_announced"
-                ] = True
+                f"<@{uid}>"
 
-                mentions = " ".join(
-
-                    f"<@{user_id}>"
-
-                    for user_id in gathering[
-                        "participants"
-                    ]
-                )
-
-                await interaction.response.send_message(
-
-                    "✅ Ты записан в сбор!",
-
-                    ephemeral=True
-                )
-
-                await interaction.channel.send(
-
-                    f"🎉 **СБОР 5X5 НАБРАН!**\n\n"
-                    f"{mentions}\n\n"
-                    f"👥 **10 / 10 игроков**\n\n"
-                    f"🚀 Создатель сбора может "
-                    f"нажать **«Начать матч»**."
-                )
-
-            else:
-
-                await interaction.response.send_message(
-
-                    "✅ Ты записан в сбор!",
-
-                    ephemeral=True
-                )
-
-        else:
-
-            await interaction.response.send_message(
-
-                "✅ Ты записан в сбор!",
-
-                ephemeral=True
+                for uid in gathering["participants"]
             )
 
-        await update_5x5_message(
+            await interaction.channel.send(
 
-            self.gathering_id
-        )
+                f"🔥 **СБОР 5X5 НАБРАН!**\n\n"
+                f"{mentions}\n\n"
+                f"👥 **10 / 10 игроков**\n"
+                f"🚀 Создатель может нажать "
+                f"**«Начать 5X5»**."
+            )
+
+            await update_5x5_message(
+                self.gathering_id
+            )
 
     # ========================================================
     # ВЫЙТИ
     # ========================================================
 
     async def leave_callback(
-
         self,
-
         interaction: discord.Interaction
     ):
 
         gathering = gatherings_5x5.get(
-
             self.gathering_id
         )
 
@@ -2449,7 +2421,7 @@ class Gathering5x5View(
 
             await interaction.response.send_message(
 
-                "❌ Этот сбор больше не существует.",
+                "❌ Этот сбор уже удалён.",
 
                 ephemeral=True
             )
@@ -2469,36 +2441,30 @@ class Gathering5x5View(
 
         user_id = interaction.user.id
 
-        if user_id not in gathering[
-            "participants"
-        ]:
+        if user_id not in gathering["participants"]:
 
             await interaction.response.send_message(
 
-                "⚠️ Ты не участвуешь в этом сборе.",
+                "⚠️ Ты не зарегистрирован "
+                "в этом сборе.",
 
                 ephemeral=True
             )
 
             return
 
-        gathering[
-            "participants"
-        ].remove(user_id)
-
-        gathering[
-            "full_announced"
-        ] = False
+        gathering["participants"].remove(
+            user_id
+        )
 
         await interaction.response.send_message(
 
-            "🚪 Ты вышел из сбора.",
+            "🚪 Ты вышел из сбора 5X5.",
 
             ephemeral=True
         )
 
         await update_5x5_message(
-
             self.gathering_id
         )
 
@@ -2507,14 +2473,11 @@ class Gathering5x5View(
     # ========================================================
 
     async def start_callback(
-
         self,
-
         interaction: discord.Interaction
     ):
 
         gathering = gatherings_5x5.get(
-
             self.gathering_id
         )
 
@@ -2529,13 +2492,8 @@ class Gathering5x5View(
 
             return
 
-        # ====================================================
-        # ТОЛЬКО СОЗДАТЕЛЬ
-        # ====================================================
-
-        if interaction.user.id != gathering[
-            "creator_id"
-        ]:
+        # Только создатель
+        if interaction.user.id != gathering["creator_id"]:
 
             await interaction.response.send_message(
 
@@ -2564,7 +2522,7 @@ class Gathering5x5View(
 
             await interaction.response.send_message(
 
-                "❌ Для начала нужно 10 игроков.",
+                "❌ Нужно ровно 10 игроков.",
 
                 ephemeral=True
             )
@@ -2572,291 +2530,203 @@ class Gathering5x5View(
             return
 
         # ====================================================
-        # ИЩЕМ КАТЕГОРИЮ
+        # ПЕРЕМЕШИВАЕМ
         # ====================================================
 
-        category = None
+        players = gathering[
+            "participants"
+        ].copy()
 
-        for cat in interaction.guild.categories:
-
-            if cat.name == TEAM_CATEGORY_NAME:
-
-                category = cat
-
-                break
-
-        if category is None:
-
-            try:
-
-                category = await interaction.guild.create_category(
-
-                    TEAM_CATEGORY_NAME,
-
-                    reason="Создание каналов матча 5X5"
-                )
-
-            except discord.Forbidden:
-
-                await interaction.response.send_message(
-
-                    "❌ Бот не может создать категорию.\n"
-                    "Нужно право **Manage Channels**.",
-
-                    ephemeral=True
-                )
-
-                return
-
-        # ====================================================
-        # СОЗДАЁМ ПЕРВЫЙ ВОЙС
-        # ====================================================
-
-        try:
-
-            team_1 = await interaction.guild.create_voice_channel(
-
-                name=TEAM_1_NAME,
-
-                category=category,
-
-                reason=(
-                    f"Матч 5X5 №"
-                    f"{self.gathering_id}"
-                )
-            )
-
-        except discord.Forbidden:
-
-            await interaction.response.send_message(
-
-                "❌ Бот не может создавать голосовые каналы.\n"
-                "Нужно право **Manage Channels**.",
-
-                ephemeral=True
-            )
-
-            return
-
-        # ====================================================
-        # СОЗДАЁМ ВТОРОЙ ВОЙС
-        # ====================================================
-
-        try:
-
-            team_2 = await interaction.guild.create_voice_channel(
-
-                name=TEAM_2_NAME,
-
-                category=category,
-
-                reason=(
-                    f"Матч 5X5 №"
-                    f"{self.gathering_id}"
-                )
-            )
-
-        except discord.Forbidden:
-
-            try:
-
-                await team_1.delete(
-                    reason="Не удалось создать второй войс"
-                )
-
-            except discord.HTTPException:
-
-                pass
-
-            await interaction.response.send_message(
-
-                "❌ Бот не смог создать второй голосовой канал.",
-
-                ephemeral=True
-            )
-
-            return
-
-        # ====================================================
-        # РАНДОМНО ДЕЛИМ 10 ИГРОКОВ
-        # ====================================================
-
-        players = list(
-            gathering["participants"]
+        random.shuffle(
+            players
         )
 
-        random.shuffle(players)
+        team1 = players[:5]
 
-        team_1_players = players[:5]
+        team2 = players[5:]
 
-        team_2_players = players[5:]
+        gathering["team1"] = team1
 
-        # ====================================================
-        # СОХРАНЯЕМ
-        # ====================================================
-
-        gathering[
-            "started"
-        ] = True
-
-        gathering[
-            "team_1_id"
-        ] = team_1.id
-
-        gathering[
-            "team_2_id"
-        ] = team_2.id
+        gathering["team2"] = team2
 
         # ====================================================
-        # ОТВЕТ
+        # КАТЕГОРИЯ
+        # ====================================================
+
+        category = await get_voice_category(
+
+            interaction.guild
+        )
+
+        if not category:
+
+            await interaction.response.send_message(
+
+                "❌ Не удалось найти/создать "
+                "категорию для голосовых каналов.",
+
+                ephemeral=True
+            )
+
+            return
+
+        # ====================================================
+        # СОЗДАЁМ 2 ВОЙСА
+        # ====================================================
+
+        try:
+
+            voice1 = await interaction.guild.create_voice_channel(
+
+                name=f"🔵 5X5 — Команда 1",
+
+                category=category,
+
+                reason="Создание командного войса 5X5"
+            )
+
+            voice2 = await interaction.guild.create_voice_channel(
+
+                name=f"🔴 5X5 — Команда 2",
+
+                category=category,
+
+                reason="Создание командного войса 5X5"
+            )
+
+        except discord.Forbidden:
+
+            await interaction.response.send_message(
+
+                "❌ У бота нет права "
+                "**Manage Channels**.",
+
+                ephemeral=True
+            )
+
+            return
+
+        gathering["team_voice_ids"] = [
+            voice1.id,
+            voice2.id
+        ]
+
+        gathering["started"] = True
+
+        # ====================================================
+        # ПЕРВЫЙ ОТВЕТ
         # ====================================================
 
         await interaction.response.send_message(
 
-            "🚀 **Матч 5X5 начинается!**\n\n"
-            f"🔵 {team_1.mention}\n"
-            f"🔴 {team_2.mention}",
+            "🚀 **Матч 5X5 начался!**",
 
             ephemeral=True
         )
 
         # ====================================================
-        # ПЕРЕМЕЩЕНИЕ ИГРОКОВ
+        # ПЕРЕМЕЩАЕМ КОМАНДУ 1
         # ====================================================
 
-        team_1_mentions = []
+        moved1 = 0
 
-        team_2_mentions = []
-
-        moved_1 = 0
-
-        moved_2 = 0
-
-        failed = 0
-
-        # ----------------------------------------------------
-        # КОМАНДА 1
-        # ----------------------------------------------------
-
-        for user_id in team_1_players:
+        for user_id in team1:
 
             member = interaction.guild.get_member(
                 user_id
             )
 
             if not member:
-
                 continue
 
-            team_1_mentions.append(
-                member.mention
-            )
+            if member.voice:
 
-            if member.voice is None:
+                try:
 
-                failed += 1
-
-                continue
-
-            try:
-
-                await member.move_to(
-
-                    team_1,
-
-                    reason=(
-                        f"Перемещение в "
-                        f"команду 1 матча "
-                        f"5X5 №"
-                        f"{self.gathering_id}"
+                    await member.move_to(
+                        voice1,
+                        reason="Перемещение в команду 1"
                     )
-                )
 
-                moved_1 += 1
+                    moved1 += 1
 
-            except (
-                discord.Forbidden,
-                discord.HTTPException
-            ):
+                except (
+                    discord.Forbidden,
+                    discord.HTTPException
+                ):
 
-                failed += 1
+                    pass
 
-        # ----------------------------------------------------
-        # КОМАНДА 2
-        # ----------------------------------------------------
+        # ====================================================
+        # ПЕРЕМЕЩАЕМ КОМАНДУ 2
+        # ====================================================
 
-        for user_id in team_2_players:
+        moved2 = 0
+
+        for user_id in team2:
 
             member = interaction.guild.get_member(
                 user_id
             )
 
             if not member:
-
                 continue
 
-            team_2_mentions.append(
-                member.mention
-            )
+            if member.voice:
 
-            if member.voice is None:
+                try:
 
-                failed += 1
-
-                continue
-
-            try:
-
-                await member.move_to(
-
-                    team_2,
-
-                    reason=(
-                        f"Перемещение в "
-                        f"команду 2 матча "
-                        f"5X5 №"
-                        f"{self.gathering_id}"
+                    await member.move_to(
+                        voice2,
+                        reason="Перемещение в команду 2"
                     )
-                )
 
-                moved_2 += 1
+                    moved2 += 1
 
-            except (
-                discord.Forbidden,
-                discord.HTTPException
-            ):
+                except (
+                    discord.Forbidden,
+                    discord.HTTPException
+                ):
 
-                failed += 1
+                    pass
 
         # ====================================================
-        # ОБНОВЛЯЕМ СООБЩЕНИЕ
+        # СООБЩЕНИЕ С КОМАНДАМИ
         # ====================================================
 
-        await update_5x5_message(
+        team1_mentions = " ".join(
 
-            self.gathering_id
+            f"<@{uid}>"
+
+            for uid in team1
         )
 
-        # ====================================================
-        # ОТПРАВЛЯЕМ КОМАНДЫ
-        # ====================================================
+        team2_mentions = " ".join(
+
+            f"<@{uid}>"
+
+            for uid in team2
+        )
 
         await interaction.channel.send(
 
-            f"🚀 **МАТЧ НАЧАЛСЯ!**\n\n"
+            f"⚔️ **5X5 НАЧАЛСЯ!**\n\n"
 
             f"🔵 **КОМАНДА 1**\n"
-            f"{' '.join(team_1_mentions)}\n"
-            f"🔊 {team_1.mention}\n\n"
+            f"{team1_mentions}\n"
+            f"🔊 {voice1.mention}\n\n"
 
             f"🔴 **КОМАНДА 2**\n"
-            f"{' '.join(team_2_mentions)}\n"
-            f"🔊 {team_2.mention}\n\n"
+            f"{team2_mentions}\n"
+            f"🔊 {voice2.mention}\n\n"
 
-            f"📊 Перемещено:\n"
-            f"🔵 Команда 1: {moved_1}/5\n"
-            f"🔴 Команда 2: {moved_2}/5\n"
-            f"⚠️ Не перемещено: {failed}"
+            f"🏁 Когда матч закончится, "
+            f"создатель сбора нажимает "
+            f"**«Конец матча»**."
+        )
+
+        await update_5x5_message(
+            self.gathering_id
         )
 
     # ========================================================
@@ -2864,14 +2734,11 @@ class Gathering5x5View(
     # ========================================================
 
     async def end_callback(
-
         self,
-
         interaction: discord.Interaction
     ):
 
         gathering = gatherings_5x5.get(
-
             self.gathering_id
         )
 
@@ -2886,13 +2753,8 @@ class Gathering5x5View(
 
             return
 
-        # ====================================================
-        # ТОЛЬКО СОЗДАТЕЛЬ
-        # ====================================================
-
-        if interaction.user.id != gathering[
-            "creator_id"
-        ]:
+        # Только создатель
+        if interaction.user.id != gathering["creator_id"]:
 
             await interaction.response.send_message(
 
@@ -2915,227 +2777,121 @@ class Gathering5x5View(
 
             return
 
-        if gathering["finished"]:
+        await interaction.response.send_message(
 
-            await interaction.response.send_message(
+            "🏁 Завершаю матч и возвращаю игроков...",
 
-                "❌ Матч уже завершён.",
-
-                ephemeral=True
-            )
-
-            return
+            ephemeral=True
+        )
 
         # ====================================================
-        # ИЩЕМ ОБЩИЙ ВОЙС
+        # ОБЩИЙ ВОЙС
         # ====================================================
 
-        common_voice = None
+        general_voice = interaction.guild.get_channel(
 
-        for channel in interaction.guild.voice_channels:
-
-            if channel.name == COMMON_VOICE_NAME:
-
-                common_voice = channel
-
-                break
-
-        if common_voice is None:
-
-            await interaction.response.send_message(
-
-                f"❌ Я не нашёл общий голосовой канал "
-                f"**{COMMON_VOICE_NAME}**.\n\n"
-
-                f"Создай его вручную и снова нажми "
-                f"**«Конец матча»**.",
-
-                ephemeral=True
-            )
-
-            return
-
-        gathering[
-            "common_voice_id"
-        ] = common_voice.id
-
-        # ====================================================
-        # ПЕРЕМЕЩАЕМ ВСЕХ В ОБЩИЙ
-        # ====================================================
+            GENERAL_VOICE_ID
+        )
 
         moved = 0
 
-        failed = 0
+        if isinstance(
+            general_voice,
+            discord.VoiceChannel
+        ):
 
-        for user_id in gathering[
-            "participants"
-        ]:
+            for user_id in gathering["participants"]:
 
-            member = interaction.guild.get_member(
-
-                user_id
-            )
-
-            if not member:
-
-                continue
-
-            if member.voice is None:
-
-                continue
-
-            try:
-
-                await member.move_to(
-
-                    common_voice,
-
-                    reason=(
-                        f"Завершение матча "
-                        f"5X5 №"
-                        f"{self.gathering_id}"
-                    )
+                member = interaction.guild.get_member(
+                    user_id
                 )
 
-                moved += 1
+                if not member:
+                    continue
 
-            except (
-                discord.Forbidden,
-                discord.HTTPException
-            ):
+                try:
 
-                failed += 1
+                    await member.move_to(
 
-        # ====================================================
-        # ПРОВЕРЯЕМ КОМАНДНЫЕ ВОЙСЫ
-        # ====================================================
+                        general_voice,
 
-        team_channels = []
+                        reason="Окончание матча 5X5"
+                    )
 
-        if gathering["team_1_id"]:
+                    moved += 1
 
-            channel = interaction.guild.get_channel(
+                except (
+                    discord.Forbidden,
+                    discord.HTTPException
+                ):
 
-                gathering["team_1_id"]
+                    pass
+
+        else:
+
+            await interaction.channel.send(
+
+                "⚠️ **Общий голосовой канал "
+                "не настроен.**\n\n"
+                "Укажи правильный "
+                "`GENERAL_VOICE_ID` в коде."
             )
 
-            if isinstance(
-                channel,
-                discord.VoiceChannel
-            ):
-
-                team_channels.append(channel)
-
-        if gathering["team_2_id"]:
-
-            channel = interaction.guild.get_channel(
-
-                gathering["team_2_id"]
-            )
-
-            if isinstance(
-                channel,
-                discord.VoiceChannel
-            ):
-
-                team_channels.append(channel)
-
         # ====================================================
-        # УДАЛЯЕМ ПУСТЫЕ КАНАЛЫ
+        # УДАЛЯЕМ КОМАНДНЫЕ ВОЙСЫ
         # ====================================================
 
         deleted = 0
 
-        not_empty = 0
+        for voice_id in gathering.get(
+            "team_voice_ids",
+            []
+        ):
 
-        for channel in team_channels:
+            voice = interaction.guild.get_channel(
+                voice_id
+            )
 
-            # ------------------------------------------------
-            # Если в канале остались люди — не удаляем
-            # ------------------------------------------------
+            if voice:
 
-            if len(channel.members) > 0:
+                try:
 
-                not_empty += 1
+                    await voice.delete(
 
-                continue
-
-            try:
-
-                await channel.delete(
-
-                    reason=(
-                        f"Завершение матча "
-                        f"5X5 №"
-                        f"{self.gathering_id}"
+                        reason="Окончание матча 5X5"
                     )
-                )
 
-                deleted += 1
+                    deleted += 1
 
-            except (
-                discord.Forbidden,
-                discord.HTTPException
-            ):
+                except (
+                    discord.Forbidden,
+                    discord.HTTPException
+                ):
 
-                pass
+                    pass
 
         # ====================================================
         # ЗАВЕРШАЕМ СБОР
         # ====================================================
 
-        gathering[
-            "finished"
-        ] = True
+        gathering["finished"] = True
 
-        # ====================================================
-        # ОБНОВЛЯЕМ СООБЩЕНИЕ
-        # ====================================================
+        await interaction.channel.send(
 
-        await update_5x5_message(
-
-            self.gathering_id
-        )
-
-        # ====================================================
-        # РЕЗУЛЬТАТ
-        # ====================================================
-
-        await interaction.response.send_message(
-
-            f"🏁 **Матч завершён!**\n\n"
-
-            f"🔊 Общий войс: "
-            f"{common_voice.mention}\n"
-
-            f"👥 Перемещено в общий: "
-            f"**{moved}**\n"
-
-            f"❌ Ошибок перемещения: "
-            f"**{failed}**\n\n"
-
+            f"🏁 **МАТЧ 5X5 ЗАВЕРШЁН!**\n\n"
+            f"👥 Игроков: "
+            f"{len(gathering['participants'])}\n"
+            f"🔊 Возвращено в общий войс: "
+            f"{moved}\n"
             f"🗑️ Удалено командных войсов: "
-            f"**{deleted}**\n"
-
-            f"⚠️ Осталось занятых войсов: "
-            f"**{not_empty}**",
-
-            ephemeral=False
+            f"{deleted}"
         )
 
-        # ====================================================
-        # ЕСЛИ ВСЕ ВОЙСЫ УДАЛЕНЫ
-        # МОЖНО УДАЛИТЬ СБОР ИЗ ПАМЯТИ
-        # ====================================================
-
-        if not_empty == 0:
-
-            gatherings_5x5.pop(
-
-                self.gathering_id,
-
-                None
-            )
+        # Удаляем сбор из памяти
+        gatherings_5x5.pop(
+            self.gathering_id,
+            None
+        )
 
 
 # ============================================================
@@ -3146,7 +2902,7 @@ class Gathering5x5View(
 
     name="сбор5x5",
 
-    description="Создать сбор 5 на 5"
+    description="Создать сбор игроков 5X5"
 )
 
 @app_commands.guild_only()
@@ -3158,26 +2914,28 @@ async def gathering_5x5_command(
 
     embed = discord.Embed(
 
-        title="🎮 Сбор 5X5",
+        title="⚔️ Сбор 5X5",
 
         description=(
 
             "Создай матч **5 на 5**.\n\n"
 
-            "После создания нужно набрать "
-            "**10 игроков**.\n\n"
+            "После создания сбора нужно "
+            "набрать **10 игроков**.\n\n"
 
-            "Когда 10 игроков будут набраны, "
-            "создатель сможет начать матч.\n\n"
-
-            "Бот случайным образом разделит "
-            "игроков на две команды по 5 человек."
+            "После набора:\n"
+            "• игроков будет случайно разделено "
+            "на 2 команды по 5;\n"
+            "• создадутся два голосовых канала;\n"
+            "• игроки будут перемещены в свои команды;\n"
+            "• закончить матч сможет только "
+            "создатель сбора."
         ),
 
         color=discord.Color.blurple()
     )
 
-    view = Create5x5View()
+    view = CreateGathering5x5View()
 
     await interaction.response.send_message(
 
