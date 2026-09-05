@@ -1675,25 +1675,51 @@ async def on_ready():
 
     try:
 
-        # ----------------------------------------------------
-        # Удаляем старые серверные регистрации команд
-        # ----------------------------------------------------
+        # Синхронизация глобальных команд
+        synced = await bot.tree.sync()
 
+        print(
+            f"✅ Глобально синхронизировано команд: "
+            f"{len(synced)}"
+        )
+
+        # Синхронизация непосредственно с серверами
+        # чтобы новые команды появлялись сразу
         for guild in bot.guilds:
 
-            bot.tree.clear_commands(
-                guild=guild
-            )
+            try:
 
-            await bot.tree.sync(
-                guild=guild
-            )
+                # Убираем старые команды сервера
+                bot.tree.clear_commands(
+                    guild=guild
+                )
 
-            print(
-                f"🧹 Старые команды сервера "
-                f"'{guild.name}' очищены."
-            )
+                # Копируем актуальные глобальные команды
+                bot.tree.copy_global_to(
+                    guild=guild
+                )
 
+                guild_synced = await bot.tree.sync(
+                    guild=guild
+                )
+
+                print(
+                    f"✅ Сервер '{guild.name}': "
+                    f"{len(guild_synced)} команд"
+                )
+
+            except Exception as guild_error:
+
+                print(
+                    f"❌ Ошибка синхронизации "
+                    f"'{guild.name}': {guild_error}"
+                )
+
+    except Exception as error:
+
+        print(
+            f"❌ Ошибка синхронизации: {error}"
+        )
         # ----------------------------------------------------
         # Регистрируем актуальные команды глобально
         # ----------------------------------------------------
