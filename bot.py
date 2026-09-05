@@ -1,9 +1,10 @@
 import discord
 import os
+import random
+
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional
-
 
 # ============================================================
 # НАСТРОЙКИ
